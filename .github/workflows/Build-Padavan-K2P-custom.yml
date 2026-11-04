@@ -1,0 +1,136 @@
+name: Build-Padavan-K2P-Custom
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  REPO_URL: https://github.com/yer2018/Padavan-K2P
+  TNAME: K2P
+  KERNEL: 3.4
+  TZ: Asia/Shanghai
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@main
+
+    - name: 最大化编译空间
+      uses: jlumbroso/free-disk-space@main
+      with:
+        tool-cache: true
+        android: true
+        dotnet: true
+        haskell: true
+        large-packages: true
+        docker-images: true
+        swap-storage: true
+
+    - name: 初始化编译环境
+      env:
+        DEBIAN_FRONTEND: noninteractive
+      run: |
+        sudo -E apt-get -qq update -y
+        sudo -E apt-get -qq install -y unzip libtool-bin curl cmake gperf gawk flex bison nano xxd fakeroot \
+        cpio git python3-docutils gettext automake autopoint texinfo build-essential help2man \
+        pkg-config zlib1g-dev libgmp3-dev libmpc-dev libmpfr-dev libncurses5-dev libltdl-dev wget
+        sudo -E apt-get -qq autoremove --purge
+        sudo -E apt-get -qq clean
+        sudo timedatectl set-timezone "$TZ"
+        sudo mkdir -p /workdir
+        sudo chown $USER:$GROUPS /workdir
+
+    - name: 克隆源码
+      working-directory: /workdir
+      run: |
+        git clone $REPO_URL --depth=1 rt-n56u
+        ln -sf /workdir/rt-n56u $GITHUB_WORKSPACE/rt-n56u
+        cd rt-n56u/toolchain-mipsel
+        sh dl_toolchain.sh
+        [ -d "/workdir/rt-n56u/toolchain-mipsel/toolchain-3.4.x" ] && sudo ln -svf /workdir/rt-n56u/toolchain-mipsel/toolchain-3.4.x /toolchain-3.4.x
+        df -hT /workdir
+        echo "FILE_DATE=$(date +"%Y%m%d")" >> $GITHUB_ENV
+
+    - name: 应用自定义补丁（账号密码UI + 定时唤醒WOL）
+      run: |
+        cd rt-n56u
+        echo 'ZGlmZiAtLWdpdCBhL3RydW5rL3VzZXIvaHR0cGQvdmFyaWFibGVzLmMgYi90cnVuay91c2VyL2h0dHBkL3ZhcmlhYmxlcy5jCmluZGV4IDlhODU2YWY1MC4uYzI0MDc5MGNmIDEwMDY0NAotLS0gYS90cnVuay91c2VyL2h0dHBkL3ZhcmlhYmxlcy5jCisrKyBiL3RydW5rL3VzZXIvaHR0cGQvdmFyaWFibGVzLmMKQEAgLTYxOSw2ICs2MTksOSBAQAogCQkJeyJjcm9uZF9lbmFibGUiLCAiIiwgTlVMTCwgRVZNX1JFU1RBUlRfQ1JPTkR9LAogCQkJeyJjcm9uZF9sb2ciLCAiIiwgTlVMTCwgRVZNX1JFU1RBUlRfQ1JPTkR9LAogCQkJeyJjcm9udGFiLmxvZ2luIiwgIkZpbGUiLCBOVUxMLCBFVk1fUkVTVEFSVF9DUk9ORHxFVk1fQkxPQ0tfVU5TQUZFfSwKKwkJCXsid29sX3NjaGVkX2VuYWJsZSIsICIiLCBOVUxMLCBFVk1fUkVTVEFSVF9DUk9ORH0sCisJCQl7IndvbF9zY2hlZF9tYWMiLCAiIiwgTlVMTCwgRVZNX1JFU1RBUlRfQ1JPTkR9LAorCQkJeyJ3b2xfc2NoZWRfY3JvbiIsICIiLCBOVUxMLCBFVk1fUkVTVEFSVF9DUk9ORH0sCiAJCQl7InNjcmlwdHMuYXV0aG9yaXplZF9rZXlzIiwgIkZpbGUiLCBOVUxMLCBFVk1fUkVTVEFSVF9TU0hEfEVWTV9CTE9DS19VTlNBRkV9LAogCQkJeyJldGhlcl9pZ21wIiwgIiIsIE5VTEwsIEVWTV9SRVNUQVJUX1NXSVRDSF9DRkd9LAogCQkJeyJldGhlcl91cG9ydCIsICIiLCBOVUxMLCBFVk1fUkVTVEFSVF9TV0lUQ0hfQ0ZHfSwKZGlmZiAtLWdpdCBhL3RydW5rL3VzZXIvcmMvcmMuYyBiL3RydW5rL3VzZXIvcmMvcmMuYwppbmRleCA5YjA2NzI3MWUuLjYwNDRmODJjOSAxMDA2NDQKLS0tIGEvdHJ1bmsvdXNlci9yYy9yYy5jCisrKyBiL3RydW5rL3VzZXIvcmMvcmMuYwpAQCAtODI5LDYgKzgyOSw2NCBAQCBMRURfQ09OVFJPTChpbnQgZ3Bpb19sZWQsIGludCBmbGFnKQogCX0KIH0KIAorc3RhdGljIGludAorc3RyX3ZhbGlkX2NoYXJzKGNvbnN0IGNoYXIgKnMsIGNvbnN0IGNoYXIgKmFsbG93KQoreworCWNvbnN0IGNoYXIgKnA7CisKKwlmb3IgKHAgPSBzOyAqcDsgcCsrKQorCQlpZiAoIXN0cmNocihhbGxvdywgKnApKQorCQkJcmV0dXJuIDA7CisKKwlyZXR1cm4gMTsKK30KKworc3RhdGljIGludAorYXBwbHlfd29sX3NjaGVkdWxlKHZvaWQpCit7CisJY29uc3QgY2hhciAqY3JvbmRfZGlyID0gIi9ldGMvc3RvcmFnZS9jcm9uL2Nyb250YWJzIjsKKwljb25zdCBjaGFyICptYWMsICpleHA7CisJY2hhciBjbWRbNTEyXTsKKwlpbnQgY2hhbmdlZCA9IDA7CisKKwlta2Rpcihjcm9uZF9kaXIsIDA3MzApOworCXNucHJpbnRmKGNtZCwgc2l6ZW9mKGNtZCksICJncmVwIC1xcyAnI3dvbF9zY2hlZCcgJXMvJXMiLAorCQljcm9uZF9kaXIsIG52cmFtX3NhZmVfZ2V0KCJodHRwX3VzZXJuYW1lIikpOworCWlmIChzeXN0ZW0oY21kKSA9PSAwKQorCQljaGFuZ2VkID0gMTsKKworCXNucHJpbnRmKGNtZCwgc2l6ZW9mKGNtZCksICJzZWQgLWkgJy8jd29sX3NjaGVkL2QnICVzLyVzIDI+L2Rldi9udWxsIiwKKwkJY3JvbmRfZGlyLCBudnJhbV9zYWZlX2dldCgiaHR0cF91c2VybmFtZSIpKTsKKwlzeXN0ZW0oY21kKTsKKworCWlmICghbnZyYW1fbWF0Y2goIndvbF9zY2hlZF9lbmFibGUiLCAiMSIpKQorCQlyZXR1cm4gY2hhbmdlZDsKKworCW1hYyA9IG52cmFtX3NhZmVfZ2V0KCJ3b2xfc2NoZWRfbWFjIik7CisJZXhwID0gbnZyYW1fc2FmZV9nZXQoIndvbF9zY2hlZF9jcm9uIik7CisKKwlpZiAoc3RybGVuKG1hYykgPCAxMiB8fCBzdHJsZW4obWFjKSA+IDE3IHx8CisJICAgICFzdHJfdmFsaWRfY2hhcnMobWFjLCAiMDEyMzQ1Njc4OWFiY2RlZkFCQ0RFRjotLiIpKQorCXsKKwkJZGJnKCJ3b2xfc2NoZWQ6IGludmFsaWQgTUFDIGFkZHJlc3NcbiIpOworCQlyZXR1cm4gY2hhbmdlZDsKKwl9CisKKwlpZiAoc3RybGVuKGV4cCkgPCA5IHx8IHN0cmxlbihleHApID4gMzIgfHwKKwkgICAgIXN0cl92YWxpZF9jaGFycyhleHAsICIwMTIzNDU2Nzg5Ki0vLCAiKSkKKwl7CisJCWRiZygid29sX3NjaGVkOiBpbnZhbGlkIGNyb24gZXhwcmVzc2lvblxuIik7CisJCXJldHVybiBjaGFuZ2VkOworCX0KKworCXNucHJpbnRmKGNtZCwgc2l6ZW9mKGNtZCksCisJCSJlY2hvICclcyAvdXNyL3NiaW4vZXRoZXItd2FrZSAtaSBicjAgJXMgI3dvbF9zY2hlZCcgPj4gJXMvJXMiLAorCQlleHAsIG1hYywgY3JvbmRfZGlyLCBudnJhbV9zYWZlX2dldCgiaHR0cF91c2VybmFtZSIpKTsKKwlzeXN0ZW0oY21kKTsKKworCXJldHVybiAxOworfQorCiBpbnQKIGluaXRfY3JvbnRhYih2b2lkKQogewpAQCAtODM2LDYgKzg5NCw3IEBAIGluaXRfY3JvbnRhYih2b2lkKQogI2lmIGRlZmluZWQgKEFQUF9TQ1VUKQogCXJldCB8PSBzeXN0ZW0oIi9zYmluL2NoZWNrX2Nyb250YWIuc2ggYS8xIGEgYSBhIGEgc2N1dGNsaWVudF93YXRjaGNhdC5zaCIpOwogI2VuZGlmCisJcmV0IHw9IGFwcGx5X3dvbF9zY2hlZHVsZSgpOwogCXJldHVybiByZXQ7CiB9CiAKQEAgLTE0NDIsNiArMTUwMSw3IEBAIGhhbmRsZV9ub3RpZmljYXRpb25zKHZvaWQpCiAJCX0KIAkJZWxzZSBpZiAoc3RyY21wKGVudHJ5LT5kX25hbWUsIFJDTl9SRVNUQVJUX0NST05EKSA9PSAwKQogCQl7CisJCQlpbml0X2Nyb250YWIoKTsKIAkJCXJlc3RhcnRfY3JvbmQoKTsKIAkJfQogCQllbHNlIGlmIChzdHJjbXAoZW50cnktPmRfbmFtZSwgUkNOX1JFQVBQTFlfVlBOU1ZSKSA9PSAwKQpkaWZmIC0tZ2l0IGEvdHJ1bmsvdXNlci9zaGFyZWQvZGVmYXVsdHMuYyBiL3RydW5rL3VzZXIvc2hhcmVkL2RlZmF1bHRzLmMKaW5kZXggMGJlZTYyMzEwLi5hZDMxYTdhZGIgMTAwNjQ0Ci0tLSBhL3RydW5rL3VzZXIvc2hhcmVkL2RlZmF1bHRzLmMKKysrIGIvdHJ1bmsvdXNlci9zaGFyZWQvZGVmYXVsdHMuYwpAQCAtMTAxMyw2ICsxMDEzLDExIEBAIHN0cnVjdCBudnJhbV9wYWlyIHJvdXRlcl9kZWZhdWx0c1tdID0gewogCXsgImNyb25kX2VuYWJsZSIsICIxIiB9LAogCXsgImNyb25kX2xvZyIsICIwIiB9LAogCisvKiBTY2hlZHVsZWQgV2FrZS1vbi1MQU4gKi8KKwl7ICJ3b2xfc2NoZWRfZW5hYmxlIiwgIjAiIH0sCisJeyAid29sX3NjaGVkX21hYyIsICIiIH0sCisJeyAid29sX3NjaGVkX2Nyb24iLCAiMCA4ICogKiAqIiB9LAorCiAjaWYgZGVmaW5lZChCT0FSRF9ONjVVKQogCXsgImluaWNfZGlzYWJsZSIsICIwIiB9LAogI2VuZGlmCmRpZmYgLS1naXQgYS90cnVuay91c2VyL3d3dy9uNTZ1X3JpYmJvbl9maXhlZC9BZHZhbmNlZF9TZXJ2aWNlc19Db250ZW50LmFzcCBiL3RydW5rL3VzZXIvd3d3L241NnVfcmliYm9uX2ZpeGVkL0FkdmFuY2VkX1NlcnZpY2VzX0NvbnRlbnQuYXNwCmluZGV4IDc1NzUzZmE3My4uNjhlNDZmZDBhIDEwMDY0NAotLS0gYS90cnVuay91c2VyL3d3dy9uNTZ1X3JpYmJvbl9maXhlZC9BZHZhbmNlZF9TZXJ2aWNlc19Db250ZW50LmFzcAorKysgYi90cnVuay91c2VyL3d3dy9uNTZ1X3JpYmJvbl9maXhlZC9BZHZhbmNlZF9TZXJ2aWNlc19Db250ZW50LmFzcApAQCAtMjksNiArMjksNyBAQCAkaihkb2N1bWVudCkucmVhZHkoZnVuY3Rpb24oKSB7CiAJaW5pdF9pdG9nZ2xlKCdsbHRkX2VuYWJsZScpOwogCWluaXRfaXRvZ2dsZSgnYWRzY19lbmFibGUnKTsKIAlpbml0X2l0b2dnbGUoJ2Nyb25kX2VuYWJsZScsIGNoYW5nZV9jcm9uZF9lbmFibGVkKTsKKwlpbml0X2l0b2dnbGUoJ3dvbF9zY2hlZF9lbmFibGUnLCBjaGFuZ2Vfd29sX2VuYWJsZWQpOwogCWluaXRfaXRvZ2dsZSgndHR5ZF9lbmFibGUnLCBjaGFuZ2VfdHR5ZF9lbmFibGVkKTsKIAlpbml0X2l0b2dnbGUoJ3ZsbWNzZF9lbmFibGUnKTsKIAlpbml0X2l0b2dnbGUoJ25hcHQ2Nl9lbmFibGUnKTsKQEAgLTgxLDYgKzgyLDcgQEAgZnVuY3Rpb24gaW5pdGlhbCgpewogCQlodHRwX3Byb3RvX2NoYW5nZSgpOwogCX0KIAljaGFuZ2VfY3JvbmRfZW5hYmxlZCgpOworCWNoYW5nZV93b2xfZW5hYmxlZCgpOwogCQogCWlmKGZvdW5kX2FwcF90dHlkKCkpewkKIAkJJCgidGJsX3R0eWQiKS5zdHlsZS5kaXNwbGF5ID0gIiI7CkBAIC0yNTEsNiArMjUzLDEyIEBAIGZ1bmN0aW9uIGNoYW5nZV9jcm9uZF9lbmFibGVkKCl7CiAJdGV4dGFyZWFfY3JvbmRfZW5hYmxlZCh2KTsKIH0KIAorZnVuY3Rpb24gY2hhbmdlX3dvbF9lbmFibGVkKCl7CisJdmFyIHYgPSBkb2N1bWVudC5mb3JtLndvbF9zY2hlZF9lbmFibGVbMF0uY2hlY2tlZDsKKwlzaG93aGlkZV9kaXYoJ3Jvd193b2xfbWFjJywgdik7CisJc2hvd2hpZGVfZGl2KCdyb3dfd29sX2Nyb24nLCB2KTsKK30KKwogZnVuY3Rpb24gY2hhbmdlX3R0eWRfZW5hYmxlZCgpewogCXZhciB2ID0gZG9jdW1lbnQuZm9ybS50dHlkX2VuYWJsZVswXS5jaGVja2VkOwogCXNob3doaWRlX2RpdigndHR5ZF93ZWJ1aScsIHYpOwpAQCAtNjI0LDYgKzYzMiwzNCBAQCBmdW5jdGlvbiBvbl90dHlkX2xpbmsoKXsKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDwvZGl2PgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8L3RkPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDwvdHI+CisgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPHRyPgorICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8dGggd2lkdGg9IjUwJSI+5a6a5pe25ZSk6YaSIChXT0wpPC90aD4KKyAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPHRkPgorICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPGRpdiBjbGFzcz0ibWFpbl9pdG9nZ2xlIj4KKyAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8ZGl2IGlkPSJ3b2xfc2NoZWRfZW5hYmxlX29uX29mIj4KKyAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPGlucHV0IHR5cGU9ImNoZWNrYm94IiBpZD0id29sX3NjaGVkX2VuYWJsZV9mYWtlIiA8JSBudnJhbV9tYXRjaF94KCIiLCAid29sX3NjaGVkX2VuYWJsZSIsICIxIiwgInZhbHVlPTEgY2hlY2tlZCIpOyAlPjwlIG52cmFtX21hdGNoX3goIiIsICJ3b2xfc2NoZWRfZW5hYmxlIiwgIjAiLCAidmFsdWU9MCIpOyAlPj4KKyAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8L2Rpdj4KKyAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDwvZGl2PgorICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPGRpdiBzdHlsZT0icG9zaXRpb246IGFic29sdXRlOyBtYXJnaW4tbGVmdDogLTEwMDAwcHg7Ij4KKyAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8aW5wdXQgdHlwZT0icmFkaW8iIG5hbWU9IndvbF9zY2hlZF9lbmFibGUiIGlkPSJ3b2xfc2NoZWRfZW5hYmxlXzEiIGNsYXNzPSJpbnB1dCIgdmFsdWU9IjEiIDwlIG52cmFtX21hdGNoX3goIiIsICJ3b2xfc2NoZWRfZW5hYmxlIiwgIjEiLCAiY2hlY2tlZCIpOyAlPi8+PCNjaGVja2JveF9ZZXMjPgorICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxpbnB1dCB0eXBlPSJyYWRpbyIgbmFtZT0id29sX3NjaGVkX2VuYWJsZSIgaWQ9IndvbF9zY2hlZF9lbmFibGVfMCIgY2xhc3M9ImlucHV0IiB2YWx1ZT0iMCIgPCUgbnZyYW1fbWF0Y2hfeCgiIiwgIndvbF9zY2hlZF9lbmFibGUiLCAiMCIsICJjaGVja2VkIik7ICU+Lz48I2NoZWNrYm94X05vIz4KKyAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDwvZGl2PgorICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8L3RkPgorICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDwvdHI+CisgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPHRyIGlkPSJyb3dfd29sX21hYyIgc3R5bGU9ImRpc3BsYXk6bm9uZSI+CisgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDx0aD7nm67moIforr7lpIcgTUFDIOWcsOWdgDwvdGg+CisgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDx0ZD4KKyAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxpbnB1dCB0eXBlPSJ0ZXh0IiBuYW1lPSJ3b2xfc2NoZWRfbWFjIiBjbGFzcz0iaW5wdXQiIGF1dG9jb21wbGV0ZT0ib2ZmIiBtYXhsZW5ndGg9IjE3IiBzaXplPSIyNSIgdmFsdWU9IjwlIG52cmFtX2dldF94KCIiLCJ3b2xfc2NoZWRfbWFjIik7ICU+IiBvbktleVByZXNzPSJyZXR1cm4gaXNfc3RyaW5nKHRoaXMsZXZlbnQpOyIgcGxhY2Vob2xkZXI9IkFBOkJCOkNDOkREOkVFOkZGIi8+CisgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8YnIvPjxzcGFuIHN0eWxlPSJjb2xvcjojODg4Ij7ooqvllKTphpLnlLXohJHnmoTmnInnur/nvZHljaEgTUFDIOWcsOWdgO+8iOmcgOWcqOeUteiEkSBCSU9TIOS4reW8gOWQr+e9keWNoSBXYWtlIG9uIExBTu+8iTwvc3Bhbj4KKyAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPC90ZD4KKyAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8L3RyPgorICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDx0ciBpZD0icm93X3dvbF9jcm9uIiBzdHlsZT0iZGlzcGxheTpub25lIj4KKyAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPHRoPuWUpOmGkuaXtumXtCAoQ3JvbiDooajovr7lvI8pPC90aD4KKyAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPHRkPgorICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPGlucHV0IHR5cGU9InRleHQiIG5hbWU9IndvbF9zY2hlZF9jcm9uIiBjbGFzcz0iaW5wdXQiIGF1dG9jb21wbGV0ZT0ib2ZmIiBtYXhsZW5ndGg9IjMyIiBzaXplPSIyNSIgdmFsdWU9IjwlIG52cmFtX2dldF94KCIiLCJ3b2xfc2NoZWRfY3JvbiIpOyAlPiIgb25LZXlQcmVzcz0icmV0dXJuIGlzX3N0cmluZyh0aGlzLGV2ZW50KTsiLz4KKyAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxici8+PHNwYW4gc3R5bGU9ImNvbG9yOiM4ODgiPuagvOW8jzog5YiGIOaXtiDml6Ug5pyIIOWRqO+8jOS+i+WmgiAzMCA4ICogKiAqID0g5q+P5aSpIDg6MzDvvJswIDkgKiAqIDEtNSA9IOW3peS9nOaXpeavj+WkqSA5OjAwPC9zcGFuPgorICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8L3RkPgorICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDwvdHI+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPHRyPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8dGggd2lkdGg9IjUwJSI+PGEgY2xhc3M9ImhlbHBfdG9vbHRpcCIgaHJlZj0iamF2YXNjcmlwdDp2b2lkKDApOyIgb25tb3VzZW92ZXI9Im9wZW5Ub29sdGlwKHRoaXMsMjMsMSk7Ij48I1R3ZWFrc1dkZyM+PC9hPjwvdGg+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDx0ZD4K' | base64 -d > /tmp/k2p-custom.patch
+        git apply --check /tmp/k2p-custom.patch
+        git apply /tmp/k2p-custom.patch
+        echo "补丁应用成功"
+
+    - name: 加载自定义配置
+      run: |
+        cd rt-n56u/trunk
+        if [ ! -f configs/templates/$TNAME.config ] ; then
+        echo "configs/templates/$TNAME.config not found "
+        exit 1
+        fi
+        cp -f configs/templates/$TNAME.config .config
+
+        sed -i 's/CONFIG_FIRMWARE_INCLUDE_DNSFORWARDER=y/CONFIG_FIRMWARE_INCLUDE_DNSFORWARDER=n/g' .config
+        sed -i 's/CONFIG_FIRMWARE_INCLUDE_MENTOHUST=y/CONFIG_FIRMWARE_INCLUDE_MENTOHUST=n/g' .config
+        sed -i 's/CONFIG_FIRMWARE_INCLUDE_SCUTCLIENT=y/CONFIG_FIRMWARE_INCLUDE_SCUTCLIENT=n/g' .config
+        sed -i 's/CONFIG_FIRMWARE_INCLUDE_SRELAY=y/CONFIG_FIRMWARE_INCLUDE_SRELAY=n/g' .config
+        sed -i 's/CONFIG_FIRMWARE_INCLUDE_NJIT_CLIENT=y/CONFIG_FIRMWARE_INCLUDE_NJIT_CLIENT=n/g' .config
+        sed -i 's/CONFIG_FIRMWARE_INCLUDE_OPENSSL_EXE=n/CONFIG_FIRMWARE_INCLUDE_OPENSSL_EXE=y/g' .config
+
+        sed -i '/CONFIG_FIRMWARE_INCLUDE_TRANSMISSION/d' .config
+        sed -i '/CONFIG_FIRMWARE_INCLUDE_TRANSMISSION_WEB_CONTROL/d' .config
+        sed -i '/CONFIG_FIRMWARE_INCLUDE_ARIA/d' .config
+        sed -i '/CONFIG_FIRMWARE_INCLUDE_ARIA_WEB_CONTROL/d' .config
+        sed -i '/CONFIG_FIRMWARE_INCLUDE_ZEROTIER/d' .config
+        sed -i '/CONFIG_FIRMWARE_INCLUDE_FRPC/d' .config
+        sed -i '/CONFIG_FIRMWARE_INCLUDE_ALIDDNS/d' .config
+        sed -i '/CONFIG_FIRMWARE_INCLUDE_SHADOWSOCKS/d' .config
+        sed -i '/CONFIG_FIRMWARE_INCLUDE_V2RAY/d' .config
+        sed -i '/CONFIG_FIRMWARE_INCLUDE_XRAY/d' .config
+        sed -i '/CONFIG_FIRMWARE_INCLUDE_TROJAN/d' .config
+        sed -i '/CONFIG_FIRMWARE_INCLUDE_SSOBFS/d' .config
+        sed -i '/CONFIG_FIRMWARE_INCLUDE_SOFTETHERVPN_SERVER/d' .config
+        sed -i '/CONFIG_FIRMWARE_INCLUDE_SOFTETHERVPN_CLIENT/d' .config
+        sed -i '/CONFIG_FIRMWARE_INCLUDE_SOFTETHERVPN_CMD/d' .config
+        sed -i '/CONFIG_FIRMWARE_INCLUDE_NPC/d' .config
+        sed -i '/CONFIG_FIRMWARE_WEBUI_HIDE_VPN/d' .config
+        sed -i '/CONFIG_FIRMWARE_INCLUDE_OPENVPN/d' .config
+
+        echo "CONFIG_FIRMWARE_INCLUDE_NPC=y" >> .config
+        echo "CONFIG_FIRMWARE_INCLUDE_ZEROTIER=y" >> .config
+        echo "CONFIG_FIRMWARE_INCLUDE_FRPC=y" >> .config
+        echo "CONFIG_FIRMWARE_INCLUDE_ALIDDNS=y" >> .config
+        echo "CONFIG_FIRMWARE_INCLUDE_SHADOWSOCKS=y" >> .config
+        #echo "CONFIG_FIRMWARE_INCLUDE_V2RAY=y" >> .config
+        #echo "CONFIG_FIRMWARE_INCLUDE_XRAY=y" >> .config
+        echo "CONFIG_FIRMWARE_INCLUDE_TROJAN=y" >> .config
+
+        sed -i 's/\r//' .config
+
+    - name: 编译固件
+      run: |
+        cd rt-n56u/trunk
+        sudo ./clear_tree
+        sudo ./build_firmware_modify $TNAME 0
+
+    - name: 整理文件
+      run: |
+        df -Th /workdir
+        mkdir /workdir/images
+        cp rt-n56u/trunk/images/*.trx /workdir/images/K2P-custom_${{ env.FILE_DATE }}.trx
+        ls -lh /workdir/images/
+        echo "PACKAGED_OUTPUTPATH=/workdir/images" >> $GITHUB_ENV
+
+    - name: Upload firmware to release
+      uses: softprops/action-gh-release@master
+      with:
+        tag_name: Padavan-K2P-custom_${{ env.FILE_DATE }}
+        files: /workdir/images/*.trx
+        body: |
+          K2P 定制固件（基于 yer2018/Padavan-K2P 最新源码）
+          - 恢复后台账号密码修改（系统管理-系统）
+          - 新增定时唤醒 WOL（系统管理-服务）
