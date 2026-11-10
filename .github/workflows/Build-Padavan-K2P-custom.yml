@@ -8,7 +8,7 @@ permissions:
 
 env:
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-  REPO_URL: https://github.com/yer2018/Padavan-K2P
+  REPO_URL: https://github.com/marchmin/Padavan-K2P
   TNAME: K2P
   KERNEL: 3.4
   TZ: Asia/Shanghai
